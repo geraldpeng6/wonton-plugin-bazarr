@@ -1,78 +1,114 @@
-# 示例插件：nginx 显示一个网页，向登录的人问好。改成自己的应用见 https://github.com/wontonapp/wonton-docs/blob/main/develop.md#写插件。
+# Bazarr：给 Sonarr/Radarr 管的剧集和电影自动找字幕，字幕写在视频旁边。
+# 一次性服务把云吞注入的 Sonarr/Radarr 连接写进 Bazarr 配置；
+# 字幕站（OpenSubtitles.com 等）要出网，走 network.egress。
 services:
-  web:
-    # 镜像按摘要固定（多架构镜像写清单列表的摘要），标签只给人看。
-    image: nginx:1.31.8-alpine@sha256:713fc2ebfd92e8217db451477182ee91944b123d2b1ee9fd5a8c6e91ca6c3a11
+  connect-arrs:
+    # 首次写入和每次重建时对齐 Sonarr/Radarr 连接（见 connect-arrs.py）。
+    # 与主服务同一个上游镜像，避免再引入一个工具镜像；镜像里的 python3 带 PyYAML。
+    image: linuxserver/bazarr:1.6.2@sha256:832820dec70bce9e912c6eee7a95baf6551e03dbc63325a7208daaa455423752
+    user: "${PUID}:${PGID}"
+    entrypoint: ["python3", "/seed/connect-arrs.py"]
     environment:
-      # 网关代登录：SSI 回显的 Remote-User 只信核心带来的。官方镜像启动时对 templates 目录里的
-      # *.template 做 envsubst，把下面的地址换进 nginx 配置（见 web/default.conf.template）。
-      WONTON_CORE_ADDRESS: ${WONTON_CORE_ADDRESS}
-    # 包里的文件经 configs 交给容器（核心在启动前写进去），不能用卷挂载。
+      # PyYAML 打包在 Bazarr 自带的 libs 里（/app/bazarr/bin/libs），不在镜像的 venv。
+      PYTHONPATH: /app/bazarr/bin/libs
+      WONTON_X_WONTON_SONARR_URL: ${WONTON_X_WONTON_SONARR_URL:-}
+      WONTON_X_WONTON_SONARR_KEY: ${WONTON_X_WONTON_SONARR_KEY:-}
+      WONTON_X_WONTON_RADARR_URL: ${WONTON_X_WONTON_RADARR_URL:-}
+      WONTON_X_WONTON_RADARR_KEY: ${WONTON_X_WONTON_RADARR_KEY:-}
+    volumes:
+      - ${WONTON_APP_DATA}/config:/config
     configs:
-      - source: site
-        target: /etc/nginx/templates/default.conf.template
-      - source: page
-        target: /usr/share/nginx/html/index.html
-      - source: tokens
-        target: /usr/share/nginx/html/tokens.css
+      - source: connect_arrs
+        target: /seed/connect-arrs.py
+    network_mode: none
+    restart: "no"
+
+  bazarr:
+    depends_on:
+      connect-arrs:
+        condition: service_completed_successfully
+    # LinuxServer.io 打包的 Bazarr 镜像（上游只发布 zip，不发布官方镜像；LSIO 是安装文档指定的打包方），
+    # amd64 和 arm64，按清单列表（index）的摘要固定；镜像以 root 启动再降到 PUID:PGID（LSIO 约定），
+    # 数据目录由核心按默认交给 PUID:PGID。
+    image: linuxserver/bazarr:1.6.2@sha256:832820dec70bce9e912c6eee7a95baf6551e03dbc63325a7208daaa455423752
+    environment:
+      PUID: ${PUID}
+      PGID: ${PGID}
+      TZ: ${TZ}
+    volumes:
+      - ${WONTON_APP_DATA}/config:/config
+      # 与 sonarr/radarr 插件相同的挂载点：Bazarr 看到的路径必须和它们一致，
+      # 字幕才落在正确的视频旁边，不用再配 path mappings。
+      - ${WONTON_SHARE_MEDIA}:/media
     healthcheck:
-      test: ["CMD", "wget", "-q", "-O", "/dev/null", "http://127.0.0.1/healthz"]
+      # /api/system/ping 免鉴权（源码标注 unauthenticated endpoint），返回 200 即 API 层已就绪。
+      test: ["CMD", "curl", "--noproxy", "*", "--fail", "--silent", "--show-error", "http://127.0.0.1:6767/api/system/ping"]
       interval: 30s
       timeout: 5s
-      start_period: 30s
-      start_interval: 1s
+      start_period: 60s
+      start_interval: 2s
+    stop_grace_period: 30s
 
 configs:
-  site:
-    file: web/default.conf.template
-  page:
-    file: web/index.html
-  tokens:
-    file: web/tokens.css
+  connect_arrs:
+    file: connect-arrs.py
 
 x-wonton:
-  spec: "0.6"
-  # 换成你自己的：反向域名形式，装上以后不能改。
-  id: app.example.hello
-  version: 0.1.1
+  spec: "0.12"
+  id: media.bazarr.bazarr
+  version: 0.1.0
   kind: app
-  title: { zh: 你好, en: Hello }
-  description: { zh: 向登录的人问好的示例网页, en: An example page that greets whoever is signed in }
-  icon: icon.svg
+  title: { zh: 字幕助手（Bazarr）, en: Subtitles (Bazarr) }
+  description:
+    zh: 给下载好的电影和剧集自动配字幕，字幕就放在视频旁边
+    en: Automatically finds subtitles for downloaded movies and shows, right next to the video
+  icon: icon.png
   notices: [NOTICE]
-  screenshots: [screenshots/home.png]
-  author: { name: Example }
-  homepage: https://nginx.org
-  # 应用（这里是 nginx）的许可证；插件包自己的许可证写在仓库的 LICENSE 里。
-  license: BSD-2-Clause
+  screenshots: [screenshots/series.png, screenshots/languages.png]
+  author: { name: geraldpeng6, url: https://github.com/geraldpeng6 }
+  homepage: https://www.bazarr.media
+  # 应用（Bazarr）的许可证；插件包自己的许可证写在仓库的 LICENSE 里。
+  license: GPL-3.0-only
   tags:
-    zh: [工具]
-    en: [Tools]
+    zh: [字幕, 视频, 影视]
+    en: [Subtitles, Video, Movies]
+  setup:
+    zh: 第一次打开后，到 设置 → Languages 选要找的字幕语言（比如简体中文），之后新下载的视频就会自动配上字幕。
+    en: After opening for the first time, pick your subtitle languages under Settings → Languages (e.g. Simplified Chinese); new downloads then get subtitles automatically.
   about:
     zh: |
-      一个示例网页：登录以后，页面会向你问好。新建插件时可以照着改。
+      给家里下载好的电影和剧集自动配上字幕：连接 Sonarr 或 Radarr 之后，新片一下载完，Bazarr 就按你选的语言去找字幕，下载后放在视频旁边，Jellyfin 里播放时直接可选。
+
+      第一次打开就是 Bazarr 自己的界面。先到 设置 → Languages 选语言，再到 设置 → Sonarr / Radarr 看连接：装了对应插件并在云吞里接上时，地址和密钥由云吞自动填好；没接上的一侧可以手动填。
+
+      字幕来自 Bazarr 内置的字幕站（如 OpenSubtitles.com），所以需要能访问外网；字幕站自己的账号（比如 OpenSubtitles 的 VIP）在 Bazarr 设置里自己填，插件不代管。
+
+      Bazarr 的片库完全来自 Sonarr/Radarr：两个都没装时列表是空的，这是正常的。
     en: |
-      An example page: once you are signed in, the page says hello. Copy it as a starting point for a new plugin.
-  release_notes: { zh: 名字和说明更新。, en: Product name and description update. }
+      Adds subtitles to the movies and shows on your server: once connected to Sonarr or Radarr, Bazarr looks up subtitles in the languages you picked as soon as a download finishes and saves them next to the video, ready to select in Jellyfin.
+
+      The first opening shows Bazarr's own interface. Pick languages under Settings → Languages, then check Settings → Sonarr / Radarr: for sides connected through Wonton the address and key are filled in automatically; the other sides can be entered by hand.
+
+      Subtitles come from the providers built into Bazarr (such as OpenSubtitles.com), so internet access is required; provider accounts of your own (like an OpenSubtitles VIP) are entered in Bazarr's settings, the plugin does not manage them.
+
+      Bazarr's library comes entirely from Sonarr/Radarr: with neither installed the lists stay empty.
+  release_notes:
+    zh: 首次发布 Bazarr 1.6.2 插件：装好即起，连接 Sonarr/Radarr 的地址和密钥在云吞里接上后自动注入；字幕写入 media 共享文件夹，和视频放在一起。
+    en: "First release of the Bazarr 1.6.2 plugin: ready on install, with Sonarr/Radarr addresses and API keys injected once connected through Wonton; subtitles are written into the media share next to the videos."
   webui:
-    service: web
-    port: 80
-    # 示例页回显网关注入的用户名，见 https://github.com/wontonapp/wonton-docs/blob/main/plugin-spec.md#网关代登录sso-proxy。
-    sso: proxy
-    proxy:
-      headers:
-        Remote-User: "{user}"
-  # 能放进侧边栏“我的应用”的页面，见 https://github.com/wontonapp/wonton-docs/blob/main/plugin-spec.md#应用页面tabs。放不放由用户决定。
-  tabs:
-    - id: home
-      title: { zh: 主页, en: Home }
-      icon: tabs/home.svg
-      icon_selected: tabs/home-fill.svg
-      path: /
-      # 这个页面没做适配，用默认的 inset：从状态栏下沿开始，页面不用管安全区。
-      # 想让内容从状态栏后面滚过，写 layout: edge-to-edge，并用 --wonton-inset-* 留出系统安全区的位置。
-  permissions: []
-  # 上游 nginx 官方镜像，amd64 和 arm64 都有；上游没写最低内存，按本机空闲实测取整（实测约 24M，取 64M）。
+    service: bazarr
+    port: 6767
+    sso: none
+  # 两个都写 wants 不写 requires：只连其中一侧也有用（只有剧集或只有电影），
+  # requires 会在安装时强制同时装上两个提供方；wants 有就用、没有照装，详情页轻提示。
+  wants: [x-wonton.sonarr, x-wonton.radarr]
+  permissions:
+    # 字幕源（OpenSubtitles.com 等）和版本检查都要出网。
+    - network.egress
+    # 字幕写在视频旁边，需要 media 共享文件夹的写权限（与 sonarr/radarr 相同挂载点 /media）。
+    - storage.share.media:write
   requirements:
     arch: [amd64, arm64]
-    memory: 64M
+    # 上游没写最低内存；官方镜像空载实测约 180 MiB（1.6.2，单剧集样本），扫描大库、
+    # 字幕翻译和转码探测按约三倍余量取整。
+    memory: 512M
