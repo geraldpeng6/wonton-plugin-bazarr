@@ -79,7 +79,7 @@ x-wonton:
     zh: |
       给家里下载好的电影和剧集自动配上字幕：连接 Sonarr 或 Radarr 之后，新片一下载完，Bazarr 就按你选的语言去找字幕，下载后放在视频旁边，Jellyfin 里播放时直接可选。
 
-      第一次打开就是 Bazarr 自己的界面。先到 设置 → Languages 选语言，再到 设置 → Sonarr / Radarr 看连接：装了对应插件并在云吞里接上时，地址和密钥由云吞自动填好；没接上的一侧可以手动填。
+      第一次打开就是 Bazarr 自己的界面。先到 设置 → Languages 选语言，再到 设置 → Sonarr / Radarr 看连接：装了对应插件时，连接地址由云吞自动填好；API 密钥可以手动填，在对应插件的设置页里能看到。
 
       字幕来自 Bazarr 内置的字幕站（如 OpenSubtitles.com），所以需要能访问外网；字幕站自己的账号（比如 OpenSubtitles 的 VIP）在 Bazarr 设置里自己填，插件不代管。
 
@@ -87,14 +87,14 @@ x-wonton:
     en: |
       Adds subtitles to the movies and shows on your server: once connected to Sonarr or Radarr, Bazarr looks up subtitles in the languages you picked as soon as a download finishes and saves them next to the video, ready to select in Jellyfin.
 
-      The first opening shows Bazarr's own interface. Pick languages under Settings → Languages, then check Settings → Sonarr / Radarr: for sides connected through Wonton the address and key are filled in automatically; the other sides can be entered by hand.
+      The first opening shows Bazarr's own interface. Pick languages under Settings → Languages, then check Settings → Sonarr / Radarr: with the matching plugin installed, Wonton fills in the address; the API key can be entered by hand — it is shown on that plugin's own settings page.
 
       Subtitles come from the providers built into Bazarr (such as OpenSubtitles.com), so internet access is required; provider accounts of your own (like an OpenSubtitles VIP) are entered in Bazarr's settings, the plugin does not manage them.
 
       Bazarr's library comes entirely from Sonarr/Radarr: with neither installed the lists stay empty.
   release_notes:
-    zh: 首次发布 Bazarr 1.6.2 插件：装好即起，连接 Sonarr/Radarr 的地址和密钥在云吞里接上后自动注入；字幕写入 media 共享文件夹，和视频放在一起。
-    en: "First release of the Bazarr 1.6.2 plugin: ready on install, with Sonarr/Radarr addresses and API keys injected once connected through Wonton; subtitles are written into the media share next to the videos."
+    zh: 首次发布 Bazarr 1.6.2 插件：装好即起，装了 Sonarr/Radarr 时连接地址由云吞自动填好（API 密钥手动填一次）；字幕写入 media 共享文件夹，和视频放在一起。
+    en: "First release of the Bazarr 1.6.2 plugin: ready on install, with Sonarr/Radarr addresses filled in by Wonton when the matching plugin is installed (enter the API key once by hand); subtitles are written into the media share next to the videos."
   webui:
     service: bazarr
     port: 6767

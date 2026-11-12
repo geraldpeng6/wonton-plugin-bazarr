@@ -8,7 +8,7 @@
 
 ## Sonarr / Radarr 连接
 
-在云吞里把 `x-wonton.sonarr` / `x-wonton.radarr` 能力接到对应插件时，地址（`WONTON_X_WONTON_SONARR_URL` 等）和 API key（提供方声明 credentials 后的 `WONTON_X_WONTON_SONARR_KEY` 等）由一次性服务写进 Bazarr 配置，写过的侧不再改动；只装其中一个插件时另一侧照常留空，手动填也不受影响。两个能力声明都还在等核心的插件间依赖上线，在那之前手动填地址和 API key。
+在云吞里装了提供 `x-wonton.sonarr` / `x-wonton.radarr` 能力的插件时，核心把连接地址（`WONTON_X_WONTON_SONARR_URL` 等）注入给一次性服务写进 Bazarr 配置，写过的侧不再改动；API key（`WONTON_X_WONTON_SONARR_KEY` 等）要提供方在 provides 里声明 credentials 才注入，没声明时手动填一次（在对应插件的设置页能看到它的 key）。只装其中一个插件时另一侧照常留空。
 
 ## 字幕源与外网
 
